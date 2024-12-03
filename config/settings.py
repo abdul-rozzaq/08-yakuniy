@@ -47,6 +47,19 @@ REST_FRAMEWORK = {
     ],
 }
 
+SWAGGER_SETTINGS = {
+    "SECURITY_DEFINITIONS": {
+        "Token": {
+            "type": "apiKey",
+            "name": "Authorization",
+            "in": "header",
+        },
+    },
+    "LOGOUT_URL": "logout",
+    "LOGIN_URL": "rest_framework:login",
+    # 'USE_SESSION_AUTH': False
+}
+
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
@@ -106,10 +119,6 @@ AUTH_PASSWORD_VALIDATORS = [
     #     "NAME": "django.contrib.auth.password_validation.NumericPasswordValidator",
     # },
 ]
-
-
-LOGIN_URL = "rest_framework:login"
-LOGOUT_URL = "rest_framework:logout"
 
 LANGUAGE_CODE = "en-us"
 

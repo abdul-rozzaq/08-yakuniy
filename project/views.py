@@ -1,11 +1,10 @@
-from pprint import pprint
-
 from django.conf import settings
-from django.contrib.auth import authenticate, get_user_model
-from django.core.mail import EmailMultiAlternatives, send_mail
+from django.contrib.auth import get_user_model, logout
+from django.core.mail import EmailMultiAlternatives
 from django.forms.models import model_to_dict
-from django.shortcuts import get_object_or_404
+from django.shortcuts import get_object_or_404, redirect, resolve_url
 from django.template.loader import render_to_string
+from django.urls import reverse
 from django.utils.decorators import method_decorator
 from django.views.decorators.cache import cache_page
 from drf_yasg.utils import swagger_auto_schema
@@ -20,10 +19,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 
 from .models import Comment, Course, Lesson, Rating
 from .permissions import IsAdminUser, IsCourseStudent, IsCreator, IsStudent
-from .serializers import (CommentSerializer, CourseSerializer,
-                          EmailTextSerializer, LessonSerializer,
-                          RatingSerializer, RegisterSerializer,
-                          StudentIdSerializer, StudentSerializer)
+from .serializers import CommentSerializer, CourseSerializer, EmailTextSerializer, LessonSerializer, LoginSerializer, RatingSerializer, RegisterSerializer, StudentIdSerializer, StudentSerializer
 
 User = get_user_model()
 
@@ -32,10 +28,14 @@ class AuthViewset(viewsets.GenericViewSet):
     queryset = User.objects.all()
     serializer_class = RegisterSerializer
     permission_classes = [permissions.AllowAny]
+    parser_classes = [JSONParser]
+    pagination_class = None
+    filter_backends = []
 
+    @swagger_auto_schema(request_body=RegisterSerializer)
     @action(methods=["POST"], detail=False)
     def register(self, request: Request, *args, **kwargs):
-        serializer = self.serializer_class(data=request.data)
+        serializer = RegisterSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
         user = serializer.save()
@@ -45,15 +45,14 @@ class AuthViewset(viewsets.GenericViewSet):
 
         return Response({"message": "User created successfully", "access": access_token, "refresh": str(refresh)})
 
+    @swagger_auto_schema(request_body=LoginSerializer)
     @action(methods=["POST"], detail=False, url_path="login")
     def login(self, request: Request, *args, **kwargs):
-        email = request.data.get("email")
-        password = request.data.get("password")
 
-        if not email or not password:
-            raise ValidationError("Email va parolni to'ldiring.")
+        serializer = LoginSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
 
-        user = authenticate(request, email=email, password=password)
+        user = serializer.get_user(request)
 
         if not user:
             raise AuthenticationFailed("Login yoki parol noto'g'ri.")
@@ -61,11 +60,23 @@ class AuthViewset(viewsets.GenericViewSet):
         refresh = RefreshToken.for_user(user)
         access_token = str(refresh.access_token)
 
-        return Response({"message": "Login successful", "access": access_token, "refresh": str(refresh), "user": {"id": user.id, "email": user.email, "full_name": user.get_full_name()}})
+        return Response(
+            {
+                "message": "Login successful",
+                "access": access_token,
+                "refresh": str(refresh),
+                "user": {
+                    "id": user.id,
+                    "email": user.email,
+                    "full_name": user.get_full_name(),
+                },
+            },
+        )
 
     @action(methods=["POST"], detail=False, url_path="refresh")
     def refresh_token(self, request: Request, *args, **kwargs):
         refresh_token = request.data.get("refresh")
+
         if not refresh_token:
             raise ValidationError("Refresh tokenni yuborish shart.")
 
@@ -214,7 +225,7 @@ class EmailAPIView(GenericAPIView):
         for_student = serializer.validated_data.get("for_student", False)
 
         users = User.objects.all()
-        
+
         if for_admin and not for_student:
             users = User.objects.filter(is_staff=True)
 
@@ -243,3 +254,9 @@ class EmailAPIView(GenericAPIView):
             response[user.email] = bool(msg.send(fail_silently=True))
 
         return Response(response)
+
+
+def logout_view(request):
+    next_page = request.GET.get("next", "/api/")
+    logout(request)
+    return redirect(next_page)

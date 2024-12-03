@@ -1,50 +1,66 @@
-<!DOCTYPE html>
-<html lang="en">
+<html lang="uz">
 
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>EduGround - Yangilik</title>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Akauntni tasdiqlash</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f4;
+            color: #333;
+        }
+
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background-color: #ffffff;
+            padding: 20px;
+            border-radius: 5px;
+            box-shadow: 0 2px 3px rgba(0, 0, 0, 0.1);
+        }
+
+        h1 {
+            text-align: center;
+            color: #333333;
+        }
+
+        p {
+            line-height: 1.5;
+        }
+
+        .button {
+            display: inline-block;
+            padding: 10px 20px;
+            background-color: #28a745;
+            color: #fff;
+            text-decoration: none;
+            border-radius: 5px;
+            text-align: center;
+            margin-top: 20px;
+        }
+
+        .footer {
+            text-align: center;
+            margin-top: 20px;
+            font-size: 12px;
+            color: #777;
+        }
+    </style>
 </head>
 
-<body style="margin: 0; padding: 0; background-color: #f5f5f5; font-family: 'Roboto', sans-serif;">
-
-    <!-- Main Wrapper -->
-    <table align="center" border="0" cellpadding="0" cellspacing="0" width="100%" style="padding: 50px 0; background-color: #f5f5f5;">
-        <tr>
-            <td align="center">
-                <!-- Container -->
-                <table border="0" cellpadding="0" cellspacing="0" width="600" style="background-color: white; border-radius: 10px; box-shadow: 0px 0px 6px rgba(0, 0, 0, 0.1); overflow: hidden;">
-
-                    <!-- Header -->
-                    <tr>
-                        <td align="center" style="background-color: #FFB200; padding: 1rem; font-size: 1.2rem; color: white;">
-                            {{ title }}
-                        </td>
-                    </tr>
-
-                    <!-- Body -->
-                    <tr>
-                        <td style="padding: 1rem; text-align: left;">
-                            <h2 style="margin-bottom: 1rem;">Yangilik</h2>
-                            <p style="margin: 0; padding: 4px; line-height: 1.6;">
-                                {{ body }}
-                            </p>
-                        </td>
-                    </tr>
-
-                    <!-- Footer -->
-                    <tr>
-                        <td align="center" style="border-top: 1px solid #f3f3f3; font-size: 12px; padding: 1rem; font-weight: normal;">
-                            &copy; 2020 - 2024 EduGround. All Rights Reserved.
-                        </td>
-                    </tr>
-
-                </table>
-            </td>
-        </tr>
-    </table>
-
+<body>
+    <div class="container">
+        <h1>Akauntni tasdiqlash</h1>
+        <p>Hurmatli {{name}},</p>
+        <p>Sizning akauntingizni tasdiqlash uchun quyidagi tugmani bosing:</p>
+        <p><a href="{{verifyLink}}" class="button">Akauntni tasdiqlash</a></p>
+        <p>Agar siz bu so‘rovni yubormagan bo‘lsangiz, bu xabarni e'tiborsiz qoldiring.</p>
+        <p>Rahmat, <br />Bizning jamoa</p>
+    </div>
+    <div class="footer">
+        <p>&copy; 2024 Birgayur. Barcha huquqlar himoyalangan.</p>
+    </div>
 </body>
 
 </html>
