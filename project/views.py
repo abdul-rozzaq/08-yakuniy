@@ -1,17 +1,29 @@
+from pprint import pprint
+
+from django.conf import settings
 from django.contrib.auth import authenticate, get_user_model
+from django.core.mail import EmailMultiAlternatives, send_mail
+from django.forms.models import model_to_dict
 from django.shortcuts import get_object_or_404
+from django.template.loader import render_to_string
+from django.utils.decorators import method_decorator
+from django.views.decorators.cache import cache_page
 from drf_yasg.utils import swagger_auto_schema
 from rest_framework import filters, permissions, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import AuthenticationFailed, ValidationError
-from rest_framework.parsers import FormParser, MultiPartParser
+from rest_framework.generics import GenericAPIView
+from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from .models import Comment, Course, Lesson, Rating
 from .permissions import IsAdminUser, IsCourseStudent, IsCreator, IsStudent
-from .serializers import CommentSerializer, CourseSerializer, LessonSerializer, RatingSerializer, RegisterSerializer, StudentIdSerializer, StudentSerializer
+from .serializers import (CommentSerializer, CourseSerializer,
+                          EmailTextSerializer, LessonSerializer,
+                          RatingSerializer, RegisterSerializer,
+                          StudentIdSerializer, StudentSerializer)
 
 User = get_user_model()
 
@@ -74,7 +86,8 @@ class AuthViewset(viewsets.GenericViewSet):
 class CourseViewset(viewsets.ModelViewSet):
     queryset = Course.objects.all()
     serializer_class = CourseSerializer
-    permission_classes = [IsStudent]
+    permission_classes = [permissions.IsAuthenticated, IsStudent]
+    search_fields = ["title", "description"]
 
     def get_queryset(self):
 
@@ -113,39 +126,120 @@ class CourseViewset(viewsets.ModelViewSet):
 
         return Response(self.get_serializer(course).data)
 
+    @method_decorator(cache_page(60 * 5))
+    def list(self, request, *args, **kwargs):
+        return super().list(request, *args, **kwargs)
+
+    @method_decorator(cache_page(60 * 5))
+    def retrieve(self, request, *args, **kwargs):
+        return super().retrieve(request, *args, **kwargs)
+
 
 class LessonViewset(viewsets.ModelViewSet):
     queryset = Lesson.objects.all()
     serializer_class = LessonSerializer
     parser_classes = [MultiPartParser, FormParser]
-    permission_classes = [IsCourseStudent]
+    permission_classes = [permissions.IsAuthenticated, IsCourseStudent]
+    filterset_fields = ["course", "created_at"]
+    search_fields = ["name"]
 
     def get_queryset(self):
         return super().get_queryset().filter(course__students=self.request.user)
+
+    @method_decorator(cache_page(60 * 5))
+    def list(self, request, *args, **kwargs):
+        return super().list(request, *args, **kwargs)
+
+    @method_decorator(cache_page(60 * 5))
+    def retrieve(self, request, *args, **kwargs):
+        return super().retrieve(request, *args, **kwargs)
 
 
 class CommentViewset(viewsets.ModelViewSet):
     queryset = Comment.objects.all()
     serializer_class = CommentSerializer
-    permission_classes = [IsCreator]
+    permission_classes = [permissions.IsAuthenticated, IsCreator]
+    search_fields = ["text"]
+    filterset_fields = ["lesson", "creator"]
 
     def perform_create(self, serializer):
         serializer.save(creator_id=self.request.user.id)
 
     def perform_update(self, serializer):
         serializer.save(creator_id=self.request.user.id)
+
+    @method_decorator(cache_page(60 * 5))
+    def list(self, request, *args, **kwargs):
+        return super().list(request, *args, **kwargs)
+
+    @method_decorator(cache_page(60 * 5))
+    def retrieve(self, request, *args, **kwargs):
+        return super().retrieve(request, *args, **kwargs)
 
 
 class RatingViewset(viewsets.ModelViewSet):
     queryset = Rating.objects.all()
     serializer_class = RatingSerializer
-    permission_classes = [IsCreator]
+    permission_classes = [permissions.IsAuthenticated, IsCreator]
 
-    # def get_queryset(self):
-    #     return super().get_queryset().filter(creator=self.request.user)
+    @method_decorator(cache_page(60 * 5))
+    def list(self, request, *args, **kwargs):
+        return super().list(request, *args, **kwargs)
+
+    @method_decorator(cache_page(60 * 5))
+    def retrieve(self, request, *args, **kwargs):
+        return super().retrieve(request, *args, **kwargs)
 
     def perform_create(self, serializer):
         serializer.save(creator_id=self.request.user.id)
 
     def perform_update(self, serializer):
         serializer.save(creator_id=self.request.user.id)
+
+
+class EmailAPIView(GenericAPIView):
+    parser_classes = [FormParser, JSONParser]
+    serializer_class = EmailTextSerializer
+    permission_classes = [permissions.IsAdminUser]
+
+    def post(self, request, *args, **kwargs):
+        response = {}
+
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        title = serializer.validated_data.get("title")
+        body = serializer.validated_data.get("body")
+        for_admin = serializer.validated_data.get("for_admin", False)
+        for_student = serializer.validated_data.get("for_student", False)
+
+        users = User.objects.all()
+        
+        if for_admin and not for_student:
+            users = User.objects.filter(is_staff=True)
+
+        elif for_student and not for_admin:
+            users = User.objects.filter(is_staff=False)
+
+        for user in users:
+            msg = EmailMultiAlternatives(
+                subject="EduGround",
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                to=[user.email],
+            )
+
+            context = {
+                "title": title % model_to_dict(user),
+                "body": body % model_to_dict(user),
+            }
+
+            msg_html = render_to_string(
+                "emails/message.html",
+                context=context,
+            )
+
+            msg.attach_alternative(msg_html, "text/html")
+
+            response[user.email] = bool(msg.send(fail_silently=True))
+
+        return Response(response)

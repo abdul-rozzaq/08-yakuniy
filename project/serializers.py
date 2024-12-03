@@ -61,3 +61,10 @@ class RatingSerializer(serializers.ModelSerializer):
 
 class StudentIdSerializer(serializers.Serializer):
     student_id = serializers.IntegerField()
+
+
+class EmailTextSerializer(serializers.Serializer):
+    title = serializers.CharField()
+    body = serializers.CharField()
+    for_admin = serializers.BooleanField(default=False)
+    for_student = serializers.BooleanField(default=False)
