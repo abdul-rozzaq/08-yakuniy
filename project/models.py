@@ -54,12 +54,18 @@ class Course(models.Model):
     description = models.TextField()
     students = models.ManyToManyField(User, blank=True)
 
+    def __str__(self) -> str:
+        return self.title
+
 
 class Lesson(models.Model):
     course = models.ForeignKey(Course, on_delete=models.CASCADE, related_name="lessons")
     name = models.CharField(max_length=256)
     video = models.FileField(upload_to="videos/")
     created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self) -> str:
+        return self.name
 
 
 class Comment(models.Model):
@@ -76,3 +82,6 @@ class Rating(models.Model):
     lesson = models.ForeignKey(Lesson, on_delete=models.CASCADE, related_name="ratings")
     creator = models.ForeignKey(User, on_delete=models.CASCADE)
     liked = models.BooleanField()
+
+    def __str__(self) -> str:
+        return self.creator.get_full_name() + " " + self.liked
