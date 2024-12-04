@@ -15,6 +15,7 @@ from rest_framework.generics import GenericAPIView
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.request import Request
 from rest_framework.response import Response
+from rest_framework.throttling import AnonRateThrottle, UserRateThrottle
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from .models import Comment, Course, Lesson, Rating
@@ -25,12 +26,25 @@ User = get_user_model()
 
 
 class AuthViewset(viewsets.GenericViewSet):
+    """
+    AuthViewset
+
+    Authentication bilan bog'liq amallarni boshqarish uchun javobgar. Ushbu viewset foydalanuvchilarni ro'yxatdan o'tkazish, tizimga kirish, tokenlarni yangilash va joriy foydalanuvchi ma'lumotlarini olish imkoniyatlarini ta'minlaydi.
+
+    Methods:
+        - register: Yangi foydalanuvchini ro'yxatdan o'tkazish.
+        - login: Foydalanuvchini tizimga kirishini ta'minlash.
+        - refresh_token: JWT tokenni yangilash.
+        - whoami: Joriy foydalanuvchi ma'lumotlarini qaytaradi.
+    """
+
     queryset = User.objects.all()
     serializer_class = RegisterSerializer
     permission_classes = [permissions.AllowAny]
     parser_classes = [JSONParser]
     pagination_class = None
     filter_backends = []
+    throttle_classes = [AnonRateThrottle, UserRateThrottle]
 
     @swagger_auto_schema(request_body=RegisterSerializer)
     @action(methods=["POST"], detail=False)
@@ -95,20 +109,28 @@ class AuthViewset(viewsets.GenericViewSet):
 
 
 class CourseViewset(viewsets.ModelViewSet):
+    """
+    CourseViewset
+
+    Kurslar bilan bog'liq CRUD amallarni boshqaruvchi viewset. Ushbu viewset orqali kurslarni yaratish, o'chirish, yangilash va ko'rish mumkin. Shuningdek, kursga talabalarni qo'shish yoki olib tashlash imkoniyati mavjud.
+
+    Methods:
+        - add_student: Kursga talaba qo'shish.
+        - remove_student: Kursdan talabani olib tashlash.
+        - list: Kurslar ro'yxatini olish (keshlangan).
+        - retrieve: Bitta kurs ma'lumotlarini olish (keshlangan).
+    """
+
     queryset = Course.objects.all()
     serializer_class = CourseSerializer
     permission_classes = [permissions.IsAuthenticated, IsStudent]
     search_fields = ["title", "description"]
 
     def get_queryset(self):
-
-        if self.request.user.is_staff:
-            return super().get_queryset()
-
-        return super().get_queryset().filter(students=self.request.user)
+        return super().get_queryset().filter(students=self.request.user) if not self.request.user.is_staff else super().get_queryset()
 
     @swagger_auto_schema(request_body=StudentIdSerializer, responses={200: CourseSerializer})
-    @action(methods=["POST"], detail=True, permission_classes=[IsAdminUser], url_path="add-student", url_name="add_student")
+    @action(methods=["POST"], detail=True, permission_classes=[IsAdminUser], url_path="add-student", url_name="add_student", serializer_class=StudentIdSerializer)
     def add_student(self, request, pk):
         course = self.get_object()
 
@@ -120,10 +142,10 @@ class CourseViewset(viewsets.ModelViewSet):
 
         course.students.add(student)
 
-        return Response(self.get_serializer(course).data)
+        return Response(CourseSerializer(course).data)
 
     @swagger_auto_schema(request_body=StudentIdSerializer, responses={200: CourseSerializer})
-    @action(methods=["POST"], detail=True, permission_classes=[IsAdminUser], url_path="remove-student", url_name="remove_student")
+    @action(methods=["POST"], detail=True, permission_classes=[IsAdminUser], url_path="remove-student", url_name="remove_student", serializer_class=StudentIdSerializer)
     def remove_student(self, request, pk):
         course = self.get_object()
 
@@ -135,7 +157,7 @@ class CourseViewset(viewsets.ModelViewSet):
 
         course.students.remove(student)
 
-        return Response(self.get_serializer(course).data)
+        return Response(CourseSerializer(course).data)
 
     @method_decorator(cache_page(60 * 5))
     def list(self, request, *args, **kwargs):
@@ -145,17 +167,34 @@ class CourseViewset(viewsets.ModelViewSet):
     def retrieve(self, request, *args, **kwargs):
         return super().retrieve(request, *args, **kwargs)
 
+    def get_serializer_class(self):
+        if self.action in ["remove_student", "add_student"]:
+            return StudentIdSerializer
+
+        return self.serializer_class
+
 
 class LessonViewset(viewsets.ModelViewSet):
+    """
+    LessonViewset
+
+    Darslar bilan bog'liq CRUD amallarni boshqaruvchi viewset. Ushbu viewset orqali darslarni yaratish, yangilash, o'chirish va ko'rish mumkin. Foydalanuvchi faqat o'zi ro'yxatda bo'lgan kursning darslarini ko'rishi mumkin.
+
+    Methods:
+        - list: Darslar ro'yxatini olish (keshlangan).
+        - retrieve: Bitta dars ma'lumotlarini olish (keshlangan).
+    """
+
     queryset = Lesson.objects.all()
     serializer_class = LessonSerializer
     parser_classes = [MultiPartParser, FormParser]
     permission_classes = [permissions.IsAuthenticated, IsCourseStudent]
     filterset_fields = ["course", "created_at"]
     search_fields = ["name"]
+    ordering_fields = ["name", "created_at", "pk"]
 
     def get_queryset(self):
-        return super().get_queryset().filter(course__students=self.request.user)
+        return super().get_queryset().filter(course__students=self.request.user) if not self.request.user.is_staff else super().get_queryset()
 
     @method_decorator(cache_page(60 * 5))
     def list(self, request, *args, **kwargs):
@@ -167,11 +206,22 @@ class LessonViewset(viewsets.ModelViewSet):
 
 
 class CommentViewset(viewsets.ModelViewSet):
+    """
+    CommentViewset
+
+    Foydalanuvchi tomonidan yozilgan izohlarni boshqarish uchun viewset. Ushbu viewset izohlarni yaratish, yangilash, o'chirish va ko'rish imkoniyatlarini taqdim etadi. Foydalanuvchi faqat o'zi yaratgan izohlarni boshqara oladi.
+
+    Methods:
+        - list: Izohlar ro'yxatini olish (keshlangan).
+        - retrieve: Bitta izoh ma'lumotlarini olish (keshlangan).
+    """
+
     queryset = Comment.objects.all()
     serializer_class = CommentSerializer
     permission_classes = [permissions.IsAuthenticated, IsCreator]
     search_fields = ["text"]
     filterset_fields = ["lesson", "creator"]
+    ordering_fields = ["created_at"]
 
     def perform_create(self, serializer):
         serializer.save(creator_id=self.request.user.id)
@@ -189,6 +239,16 @@ class CommentViewset(viewsets.ModelViewSet):
 
 
 class RatingViewset(viewsets.ModelViewSet):
+    """
+    RatingViewset
+
+    Kurs yoki dars uchun reytinglar boshqaruvi. Ushbu viewset orqali foydalanuvchilar reytinglarni yaratishi, o'zgartirishi yoki o'chirishi mumkin. Foydalanuvchi faqat o'zi yaratgan reytinglarni boshqara oladi.
+
+    Methods:
+        - list: Reytinglar ro'yxatini olish (keshlangan).
+        - retrieve: Bitta reyting ma'lumotlarini olish (keshlangan).
+    """
+
     queryset = Rating.objects.all()
     serializer_class = RatingSerializer
     permission_classes = [permissions.IsAuthenticated, IsCreator]
@@ -209,6 +269,15 @@ class RatingViewset(viewsets.ModelViewSet):
 
 
 class EmailAPIView(GenericAPIView):
+    """
+    EmailAPIView
+
+    Administrator tomonidan foydalanuvchilarga xabarlarni elektron pochta orqali yuborish uchun API. Xabarlar barcha foydalanuvchilarga, faqat administratorlarga yoki faqat talabalarga yuborilishi mumkin.
+
+    Methods:
+        - post: Elektron pochta xabarlarini yuborish.
+    """
+
     parser_classes = [FormParser, JSONParser]
     serializer_class = EmailTextSerializer
     permission_classes = [permissions.IsAdminUser]
@@ -257,6 +326,18 @@ class EmailAPIView(GenericAPIView):
 
 
 def logout_view(request):
+    """
+    logout_view(request)
+
+    Foydalanuvchini tizimdan chiqarish va ko'rsatilgan yoki standart sahifaga qayta yo'naltirish.
+
+    Args:
+        request (HttpRequest): Foydalanuvchi so'rovi.
+
+    Returns:
+        HttpResponse: Foydalanuvchini tizimdan chiqarib, qayta yo'naltirilgan javob.
+    """
+
     next_page = request.GET.get("next", "/api/")
     logout(request)
     return redirect(next_page)
