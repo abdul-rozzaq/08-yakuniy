@@ -132,6 +132,18 @@ class CourseViewset(viewsets.ModelViewSet):
     @swagger_auto_schema(request_body=StudentIdSerializer, responses={200: CourseSerializer})
     @action(methods=["POST"], detail=True, permission_classes=[IsAdminUser], url_path="add-student", url_name="add_student", serializer_class=StudentIdSerializer)
     def add_student(self, request, pk):
+        """
+        Kursga talaba qo'shadi.
+
+        Params:
+        - `student_id`: Talabaning ID'si.
+
+        Exceptions:
+        - Agar talaba allaqachon kursga qo'shilgan bo'lsa, `ValidationError` qaytaradi.
+
+        Returns:
+        - Yangilangan kurs ma'lumotlarini qaytaradi.
+        """
         course = self.get_object()
 
         user_id = request.data.get("student_id", None)
@@ -147,6 +159,18 @@ class CourseViewset(viewsets.ModelViewSet):
     @swagger_auto_schema(request_body=StudentIdSerializer, responses={200: CourseSerializer})
     @action(methods=["POST"], detail=True, permission_classes=[IsAdminUser], url_path="remove-student", url_name="remove_student", serializer_class=StudentIdSerializer)
     def remove_student(self, request, pk):
+        """
+        Talabani kursdan o'chiradi.
+
+        Params:
+        - `student_id`: Talabaning ID'si.
+
+        Exceptions:
+        - Agar talaba kursga qo'shilmagan bo'lsa, `ValidationError` qaytaradi.
+
+        Returns:
+        - Yangilangan kurs ma'lumotlarini qaytaradi.
+        """
         course = self.get_object()
 
         user_id = request.data.get("student_id", None)
